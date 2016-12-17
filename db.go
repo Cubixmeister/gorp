@@ -231,6 +231,15 @@ func (m *DbMap) readStructColumns(t reflect.Type) (cols []*ColumnMap, primaryKey
 	for i := 0; i < n; i++ {
 		f := t.Field(i)
 		if f.Anonymous && f.Type.Kind() == reflect.Struct {
+			// Ignore anonymous fields with db:"-" tag
+			tag := f.Tag.Get("db")
+			if tag == "-" {
+				continue
+			}
+			if tag != "" {
+				panic(fmt.Sprintf("invalid tag set for anonymous field %v", f.Name))
+			}
+
 			// Recursively add nested fields in embedded structs.
 			subcols, subpk := m.readStructColumns(f.Type)
 			// Don't append nested fields that have the same field
