@@ -13,6 +13,7 @@ package gorp
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
@@ -671,7 +672,8 @@ func (m *DbMap) Begin() (*Transaction, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Transaction{m, tx, false}, nil
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Transaction{m, tx, false, false, ctx, cancel}, nil
 }
 
 // TableFor returns the *TableMap corresponding to the given Go Type
