@@ -12,6 +12,7 @@
 package gorp
 
 import (
+	"context"
 	"database/sql"
 	"time"
 )
@@ -21,9 +22,12 @@ import (
 // of that transaction.  Transactions should be terminated with
 // a call to Commit() or Rollback()
 type Transaction struct {
-	dbmap  *DbMap
-	tx     *sql.Tx
-	closed bool
+	dbmap     *DbMap
+	tx        *sql.Tx
+	closed    bool
+	Commited  bool
+	Context   context.Context
+	cancelctx context.CancelFunc
 }
 
 // Insert has the same behavior as DbMap.Insert(), but runs in a transaction.
@@ -101,28 +105,33 @@ func (t *Transaction) SelectOne(holder interface{}, query string, args ...interf
 }
 
 // Commit commits the underlying database transaction.
-func (t *Transaction) Commit() error {
+func (t *Transaction) Commit() (err error) {
 	if !t.closed {
 		t.closed = true
 		if t.dbmap.logger != nil {
 			now := time.Now()
 			defer t.dbmap.trace(now, "commit;")
 		}
-		return t.tx.Commit()
+		err = t.tx.Commit()
+		t.Commited = err == nil // it will be safe to read in goroutines waiting on our context
+		t.cancelctx()
+		return err
 	}
 
 	return sql.ErrTxDone
 }
 
 // Rollback rolls back the underlying database transaction.
-func (t *Transaction) Rollback() error {
+func (t *Transaction) Rollback() (err error) {
 	if !t.closed {
 		t.closed = true
 		if t.dbmap.logger != nil {
 			now := time.Now()
 			defer t.dbmap.trace(now, "rollback;")
 		}
-		return t.tx.Rollback()
+		err = t.tx.Rollback()
+		t.cancelctx()
+		return err
 	}
 
 	return sql.ErrTxDone
